@@ -12,7 +12,6 @@ on:
           - upload-zip
           - upload-tar
           - git
-
       git_url:
         description: 'Git repository URL (only required if scan_type is git)'
         required: false
@@ -74,54 +73,68 @@ jobs:
           mkdir -p /home/runner/.ort/config
           cp .ort/config/config.yml /home/runner/.ort/config/config.yml
 
-      - name: Add .ort.yml to exclude broken Ruby paths
-        run: |
-          echo "excludes:\n  paths:\n    - pattern: \"lib/theme_template/**\"\n      reason: \"BUILD_TOOL_OF\"\n      comment: \"Broken gemspec causing Bundler to fail\"" > .ort.yml
-
-      - name: Run ORT Full Pipeline (CLI)
+      - name: Run ORT Analyze per definition file (skip broken ones)
         run: |
           if [ "${{ github.event.inputs.scan_type }}" == "upload-zip" ]; then scan_path="uploaded-source";
           elif [ "${{ github.event.inputs.scan_type }}" == "upload-tar" ]; then scan_path="extracted-tar";
           elif [ "${{ github.event.inputs.scan_type }}" == "git" ]; then scan_path="repo-to-scan"; fi
 
-          mkdir -p ort-output
+          mkdir -p ort-output/analyzer/projects
 
-          # 1. Analyze
-          ort-cli/ort-54.0.0/bin/ort analyze -i "$scan_path" -o ort-output/analyzer
+          find "$scan_path" -type f \( -name "Gemfile" -o -name "pom.xml" -o -name "package.json" \) > definition_files.txt
 
-          # 2. Scan using SCANOSS
-          ort-cli/ort-54.0.0/bin/ort scan \
-            -i ort-output/analyzer/analyzer-result.yml \
-            -o ort-output/scanner \
-            --scanners SCANOSS
+          while IFS= read -r def_file; do
+            dir=$(dirname "$def_file")
+            safe_dir_name=$(echo "$dir" | tr / _ | sed 's/[^a-zA-Z0-9_-]//g')
+            echo "▶ Analyzing $def_file"
 
-          # 3. Advisor
+            ort-cli/ort-54.0.0/bin/ort analyze -i "$dir" -o "ort-output/analyzer/projects/$safe_dir_name" && \
+              echo "✔ Success: $def_file" || \
+              echo "❌ Skipped (failed): $def_file"
+          done < definition_files.txt
+
+          ort-cli/ort-54.0.0/bin/ort merge-results \
+            -i ort-output/analyzer/projects \
+            -o ort-output/analyzer
+
+      - name: Run SCANOSS Scanner
+        run: |
+          curl -sSL https://scanoss.com/install | sh
+          chmod +x scanoss
+          ./scanoss --src "$scan_path" --output ort-output/scanner/scanoss.spdx.json
+
+      - name: Run ORT Advisor
+        run: |
           ort-cli/ort-54.0.0/bin/ort advise \
-            -i ort-output/scanner/scan-result.yml \
+            -i ort-output/analyzer/analyzer-result.yml \
             -o ort-output/advisor
 
-          # 4. Evaluate
+      - name: Run ORT Evaluator
+        run: |
           ort-cli/ort-54.0.0/bin/ort evaluate \
             -i ort-output/advisor/advisor-result.yml \
             -o ort-output/evaluator
 
-          # 5. Generate WebApp report
+      - name: Generate WebApp Report
+        run: |
           ort-cli/ort-54.0.0/bin/ort report \
             -i ort-output/analyzer/analyzer-result.yml \
-            -i ort-output/scanner/scan-result.yml \
             -i ort-output/advisor/advisor-result.yml \
             -i ort-output/evaluator/evaluation-result.yml \
             -o ort-output/report \
             -f WebApp
 
-      - name: Generate Excel from ORT Full Pipeline Output
+      - name: Install Excel Requirements
         run: |
-          pip install pyyaml openpyxl pandas || true
+          pip install pyyaml pandas openpyxl || true
+
+      - name: Generate Excel from ORT Outputs
+        run: |
           python3 generate_excel_from_ort_full.py \
             ort-output/analyzer/analyzer-result.yml \
             ort-output/evaluator/evaluation-result.yml \
             ort-output/advisor/advisor-result.yml \
-            ort-output/scanner/scan-result.yml
+            ort-output/scanner/scanoss.spdx.json
 
       - name: Upload ORT Artifacts
         uses: actions/upload-artifact@v4
