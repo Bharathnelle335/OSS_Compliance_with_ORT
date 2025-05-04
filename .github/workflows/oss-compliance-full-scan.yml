@@ -1,4 +1,4 @@
-name: ORT Full Scan (CLI Version)
+name: ORT Full Scan (CLI Version with SCANOSS)
 
 on:
   workflow_dispatch:
@@ -12,8 +12,9 @@ on:
           - upload-zip
           - upload-tar
           - git
+
       git_url:
-        description: 'Git repository URL (required if scan_type is git)'
+        description: 'Git repository URL (only required if scan_type is git)'
         required: false
 
 jobs:
@@ -35,21 +36,11 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Clean ORT output directories
+      - name: Install Python dependencies including SCANOSS
         run: |
-          rm -rf ort-output
-          rm -rf /home/runner/.ort
-
-      - name: Copy ORT config into expected path
-        run: |
-          mkdir -p /home/runner/.ort/config
-          cp .ort/config/config.yml /home/runner/.ort/config/config.yml
-
-      - name: Download and Extract ORT CLI (v54.0.0)
-        run: |
-          curl -L --fail --retry 3 -o ort.zip https://github.com/oss-review-toolkit/ort/releases/download/54.0.0/ort-54.0.0.zip
-          unzip ort.zip -d ort-cli
-          chmod +x ort-cli/ort-54.0.0/bin/ort
+          python3 -m pip install --upgrade pip
+          python3 -m pip install --user scanoss pandas openpyxl
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Extract uploaded ZIP source
         if: ${{ github.event.inputs.scan_type == 'upload-zip' }}
@@ -73,6 +64,11 @@ jobs:
         run: |
           git clone ${{ github.event.inputs.git_url }} repo-to-scan
 
+      - name: Clean ORT output directories
+        run: |
+          rm -rf ort-output
+          rm -rf /home/runner/.ort
+
       - name: Set scan_path variable
         run: |
           if [ "${{ github.event.inputs.scan_type }}" == "upload-zip" ]; then scan_path="uploaded-source";
@@ -80,27 +76,32 @@ jobs:
           elif [ "${{ github.event.inputs.scan_type }}" == "git" ]; then scan_path="repo-to-scan"; fi
           echo "scan_path=$scan_path" >> $GITHUB_ENV
 
+      - name: Download and Extract ORT CLI (v54.0.0)
+        run: |
+          curl -L --fail --retry 3 -o ort.zip https://github.com/oss-review-toolkit/ort/releases/download/54.0.0/ort-54.0.0.zip
+          unzip ort.zip -d ort-cli
+          chmod +x ort-cli/ort-54.0.0/bin/ort
+
+      - name: Copy ORT config into expected path
+        run: |
+          mkdir -p /home/runner/.ort/config
+          cp .ort/config/config.yml /home/runner/.ort/config/config.yml
+
       - name: Run ORT Analyze
         run: |
-          mkdir -p ort-output/analyzer
-          ort-cli/ort-54.0.0/bin/ort analyze -i "$scan_path" -o ort-output/analyzer || echo "⚠ Analyze step failed."
+          ort-cli/ort-54.0.0/bin/ort analyze -i "$scan_path" -o ort-output/analyzer || true
 
-      - name: Install and Run SCANOSS CLI
+      - name: Run SCANOSS (Python CLI)
         run: |
           mkdir -p ort-output/scanner
-          curl -L -H "Accept: application/octet-stream" \
-            -o scanoss https://github.com/SCANOSS/scanoss.cli/releases/latest/download/scanoss-linux
-          chmod +x scanoss
-          ./scanoss --src "$scan_path" --output ort-output/scanner/scanoss.spdx.json || echo "⚠ SCANOSS scan failed, continuing."
-      
+          python3 -m scanoss.cli scan -o ort-output/scanner/scanoss.spdx.json "$scan_path" || echo "⚠ SCANOSS scan failed, continuing."
+
       - name: Run ORT Advise (if scan result exists)
         run: |
           if [ -f ort-output/scanner/scanoss.spdx.json ]; then
             ort-cli/ort-54.0.0/bin/ort advise \
               -i ort-output/scanner/scanoss.spdx.json \
-              -o ort-output/advisor || echo "⚠ Advisor failed."
-          else
-            echo "⚠ No scan result found. Skipping advisor step."
+              -o ort-output/advisor || true
           fi
 
       - name: Run ORT Evaluate (if advisor result exists)
@@ -108,40 +109,28 @@ jobs:
           if [ -f ort-output/advisor/advisor-result.yml ]; then
             ort-cli/ort-54.0.0/bin/ort evaluate \
               -i ort-output/advisor/advisor-result.yml \
-              -o ort-output/evaluator || echo "⚠ Evaluate failed."
-          else
-            echo "⚠ No advisor result. Skipping evaluate step."
+              -o ort-output/evaluator || true
           fi
 
       - name: Run ORT WebApp Report (if all inputs exist)
         run: |
           if [ -f ort-output/analyzer/analyzer-result.yml ] && \
-             [ -f ort-output/scanner/scanoss.spdx.json ] && \
              [ -f ort-output/advisor/advisor-result.yml ] && \
              [ -f ort-output/evaluator/evaluation-result.yml ]; then
             ort-cli/ort-54.0.0/bin/ort report \
               -i ort-output/analyzer/analyzer-result.yml \
-              -i ort-output/scanner/scanoss.spdx.json \
               -i ort-output/advisor/advisor-result.yml \
               -i ort-output/evaluator/evaluation-result.yml \
               -o ort-output/report \
-              -f WebApp || echo "⚠ WebApp report failed."
+              -f WebApp
           else
             echo "⚠ Skipping WebApp report: Required input files not found."
           fi
 
-      - name: Generate Excel Report from ORT Results
+      - name: Generate Excel from ORT Full Pipeline Output
         run: |
-          pip install pyyaml openpyxl pandas || true
-          if [ -f ort-output/analyzer/analyzer-result.yml ]; then
-            python3 generate_excel_from_ort_full.py \
-              ort-output/analyzer/analyzer-result.yml \
-              ort-output/evaluator/evaluation-result.yml \
-              ort-output/advisor/advisor-result.yml \
-              ort-output/scanner/scanoss.spdx.json || echo "⚠ Excel generation failed."
-          else
-            echo "⚠ Skipping Excel generation. analyzer-result.yml not found."
-          fi
+          pip install pandas openpyxl pyyaml || true
+          python3 generate_excel_from_ort_full.py ort-output/analyzer/analyzer-result.yml ort-output/evaluator/evaluation-result.yml ort-output/advisor/advisor-result.yml ort-output/scanner/scanoss.spdx.json || true
 
       - name: Upload ORT Artifacts
         uses: actions/upload-artifact@v4
