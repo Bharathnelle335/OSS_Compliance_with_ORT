@@ -1,4 +1,4 @@
-name: ORT Full Scan Pipeline (CLI Version)
+name: ORT Full Scan (CLI Version)
 
 on:
   workflow_dispatch:
@@ -64,11 +64,15 @@ jobs:
           mkdir -p /home/runner/.ort/config
           cp .ort/config/config.yml /home/runner/.ort/config/config.yml
 
-      - name: Run Full ORT Pipeline: analyze → scan → advisor → evaluate → report
+      - name: "Run Full ORT Pipeline: analyze → scan → advisor → evaluate → report"
         run: |
-          if [ "${{ github.event.inputs.scan_type }}" == "upload-zip" ]; then scan_path="uploaded-source";
-          elif [ "${{ github.event.inputs.scan_type }}" == "upload-tar" ]; then scan_path="extracted-tar";
-          elif [ "${{ github.event.inputs.scan_type }}" == "git" ]; then scan_path="repo-to-scan"; fi
+          if [ "${{ github.event.inputs.scan_type }}" == "upload-zip" ]; then
+            scan_path="uploaded-source"
+          elif [ "${{ github.event.inputs.scan_type }}" == "upload-tar" ]; then
+            scan_path="extracted-tar"
+          elif [ "${{ github.event.inputs.scan_type }}" == "git" ]; then
+            scan_path="repo-to-scan"
+          fi
 
           mkdir -p ort-output
 
@@ -76,6 +80,7 @@ jobs:
           ort-cli/ort-54.0.0/bin/ort scan -i ort-output/analyzer/analyzer-result.yml -o ort-output/scanner || true
           ort-cli/ort-54.0.0/bin/ort advisor -i ort-output/analyzer/analyzer-result.yml -o ort-output/advisor || true
           ort-cli/ort-54.0.0/bin/ort evaluate -i ort-output/analyzer/analyzer-result.yml -o ort-output/evaluator || true
+
           ort-cli/ort-54.0.0/bin/ort report \
             -i ort-output/analyzer/analyzer-result.yml \
             -i ort-output/scanner/scan-result.yml \
@@ -86,13 +91,11 @@ jobs:
 
       - name: Generate Excel from ORT Full Pipeline Output
         run: |
-          pip install pandas pyyaml openpyxl
-          python3 generate_excel_from_ort_full.py
+          pip install -r requirements.txt || true
+          python3 generate_excel_from_ort_full.py ort-output/analyzer/analyzer-result.yml ort-output/evaluator/evaluation-result.yml ort-output/advisor/advisor-result.yml ort-output/scanner/scan-result.yml
 
       - name: Upload ORT Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ort-full-cli-results
-          path: |
-            ort-output/
-            ort_full_scan_report.xlsx
+          name: ort-full-pipeline-results
+          path: ort-output/
