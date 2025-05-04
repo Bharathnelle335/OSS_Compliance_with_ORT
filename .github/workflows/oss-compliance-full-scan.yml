@@ -73,11 +73,12 @@ jobs:
           mkdir -p ort-output/report
           rm -rf /home/runner/.ort
 
-      - name: Copy ORT Config
+      - name: Copy ORT config into expected path
         run: |
-          mkdir -p /home/runner/.ort/config
-          cp .ort/config/config.yml /home/runner/.ort/config/config.yml || true
-
+          mkdir -p /home/runner/.ort/config/evaluation
+          cp .ort/config/config.yml /home/runner/.ort/config/config.yml
+          cp .ort/config/evaluation/rules.kts /home/runner/.ort/config/evaluation/rules.kts
+      
       - name: ORT Analyze
         run: |
           ort-cli/ort-54.0.0/bin/ort analyze \
