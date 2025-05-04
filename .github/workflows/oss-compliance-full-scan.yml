@@ -59,6 +59,12 @@ jobs:
         run: |
           git clone ${{ github.event.inputs.git_url }} repo-to-scan
 
+      - name: Install ScanCode Toolkit
+        run: |
+          curl -L -o scancode-toolkit.zip https://github.com/nexB/scancode-toolkit/releases/download/v32.2.3/scancode-toolkit-32.2.3.zip
+          unzip scancode-toolkit.zip
+          echo "$PWD/scancode-toolkit-32.2.3" >> $GITHUB_PATH
+
       - name: Copy ORT config into expected path
         run: |
           mkdir -p /home/runner/.ort/config

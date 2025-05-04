@@ -34,13 +34,14 @@ ort:
     skip_excluded: false
     archive: true
     detect_license_texts: true
-    ignore_patterns: []
+    ignore_patterns: [ ]
+    scanners:
+      - ScanCode
 
   advisor:
     enabled: true
-    options:
-      osv:
-        server_url: "https://api.osv.dev"
+    advisors:
+      - GitHubSecurityAdvisories
 
   evaluator:
     enabled: true
