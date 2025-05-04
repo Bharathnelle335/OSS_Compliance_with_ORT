@@ -74,6 +74,10 @@ jobs:
           mkdir -p /home/runner/.ort/config
           cp .ort/config/config.yml /home/runner/.ort/config/config.yml
 
+      - name: Add .ort.yml to exclude broken Ruby paths
+        run: |
+          echo "excludes:\n  paths:\n    - pattern: \"lib/theme_template/**\"\n      reason: \"BUILD_TOOL_OF\"\n      comment: \"Broken gemspec causing Bundler to fail\"" > .ort.yml
+
       - name: Run ORT Full Pipeline (CLI)
         run: |
           if [ "${{ github.event.inputs.scan_type }}" == "upload-zip" ]; then scan_path="uploaded-source";
@@ -83,15 +87,15 @@ jobs:
           mkdir -p ort-output
 
           # 1. Analyze
-          ort-cli/ort-54.0.0/bin/ort analyze -i "$scan_path" -o ort-output/analyzer || true
+          ort-cli/ort-54.0.0/bin/ort analyze -i "$scan_path" -o ort-output/analyzer
 
-          # 2. Scan with NONE (to skip ScanCode)
+          # 2. Scan using SCANOSS
           ort-cli/ort-54.0.0/bin/ort scan \
             -i ort-output/analyzer/analyzer-result.yml \
             -o ort-output/scanner \
-            --scanners NONE
+            --scanners SCANOSS
 
-          # 3. Advisor (works even if scan used NONE, for package managers like Maven, NPM etc.)
+          # 3. Advisor
           ort-cli/ort-54.0.0/bin/ort advise \
             -i ort-output/scanner/scan-result.yml \
             -o ort-output/advisor
@@ -109,13 +113,15 @@ jobs:
             -i ort-output/evaluator/evaluation-result.yml \
             -o ort-output/report \
             -f WebApp
-      
-      
 
       - name: Generate Excel from ORT Full Pipeline Output
         run: |
           pip install pyyaml openpyxl pandas || true
-          python3 generate_excel_from_ort_full.py ort-output/analyzer/analyzer-result.yml ort-output/evaluator/evaluation-result.yml ort-output/advisor/advisor-result.yml ort-output/scanner/scan-result.yml
+          python3 generate_excel_from_ort_full.py \
+            ort-output/analyzer/analyzer-result.yml \
+            ort-output/evaluator/evaluation-result.yml \
+            ort-output/advisor/advisor-result.yml \
+            ort-output/scanner/scan-result.yml
 
       - name: Upload ORT Artifacts
         uses: actions/upload-artifact@v4
