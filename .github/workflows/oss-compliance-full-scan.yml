@@ -63,13 +63,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-      
-
-      - name: Install ScanCode Toolkit
-        run: |
-          curl -L -o scancode-toolkit.tar.gz https://github.com/aboutcode-org/scancode-toolkit/releases/download/v32.2.0/scancode-toolkit-v32.2.0_py3.10-linux.tar.gz
-          tar -xzf scancode-toolkit.tar.gz
-          echo "$PWD/scancode-toolkit-v32.2.0" >> $GITHUB_PATH
 
       - name: Copy ORT config into expected path
         run: |

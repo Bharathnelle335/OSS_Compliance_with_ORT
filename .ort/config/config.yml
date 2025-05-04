@@ -7,7 +7,6 @@ ort:
       - NPM
       - PNPM
       - Yarn
-      - Yarn 2+
       - PIP
       - Pipenv
       - Poetry
@@ -19,7 +18,6 @@ ort:
       - Pub
       - SBT
       - Stack
-      - Swift Package Manager
       - CocoaPods
       - Carthage
       - Conan
@@ -34,14 +32,13 @@ ort:
     skip_excluded: false
     archive: true
     detect_license_texts: true
-    ignore_patterns: [ ]
-    scanners:
-      - ScanCode
+    ignore_patterns: [ ]  # no scanner specified = ScanCode disabled
 
   advisor:
     enabled: true
-    advisors:
-      - GitHubSecurityAdvisories
+    options:
+      enabled_advisors:
+        - GitHubSecurityAdvisories
 
   evaluator:
     enabled: true
