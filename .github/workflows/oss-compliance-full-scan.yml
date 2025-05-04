@@ -78,7 +78,7 @@ jobs:
           mkdir -p /home/runner/.ort/config/evaluation
           cp .ort/config/config.yml /home/runner/.ort/config/config.yml
           cp .ort/config/evaluation/rules.kts /home/runner/.ort/config/evaluation/rules.kts
-      
+
       - name: ORT Analyze
         run: |
           ort-cli/ort-54.0.0/bin/ort analyze \
@@ -100,14 +100,15 @@ jobs:
               --advisors OSV || true
           fi
 
-      - name: ORT Evaluate
-        if: ${{ always() }}
+      - name: Run ORT Evaluate (if advisor result exists)
+        if: ${{ exists('ort-output/advisor/advisor-result.yml') }}
         run: |
-          if [ -f ort-output/advisor/advisor-result.yml ]; then
-            ort-cli/ort-54.0.0/bin/ort evaluate \
-              -i ort-output/advisor/advisor-result.yml \
-              -o ort-output/evaluator || true
-          fi
+          ort-cli/ort-54.0.0/bin/ort evaluate \
+            -i ort-output/advisor/advisor-result.yml \
+            -o ort-output/evaluator || true
+        env:
+          JAVA_HOME: ${{ env.JAVA_HOME }}
+          ORT_CONFIG_DIR: .ort/config
 
       - name: ORT WebApp Report
         if: ${{ always() }}
