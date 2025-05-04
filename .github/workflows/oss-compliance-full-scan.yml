@@ -93,12 +93,13 @@ jobs:
             touch ort-output/analyzer/analyzer-result.yml
           fi
 
-      - name: Run SCANOSS Scanner
+      - name: Install and Run SCANOSS CLI
         run: |
-          curl -sSL https://scanoss.com/install | sh
+          mkdir -p ort-output/scanner
+          curl -L -o scanoss https://github.com/SCANOSS/scanoss.cli/releases/latest/download/scanoss-linux
           chmod +x scanoss
           ./scanoss --src "$scan_path" --output ort-output/scanner/scanoss.spdx.json || echo "⚠ SCANOSS scan failed, continuing."
-
+      
       - name: Run ORT Advisor
         run: |
           ort-cli/ort-54.0.0/bin/ort advise \
