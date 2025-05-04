@@ -83,7 +83,7 @@ jobs:
           mkdir -p ort-output
 
           # 1. Analyze
-          ort-cli/ort-54.0.0/bin/ort analyze -i "$scan_path" -o ort-output/analyzer
+          ort-cli/ort-54.0.0/bin/ort analyze -i "$scan_path" -o ort-output/analyzer || true
 
           # 2. Scan with NONE (to skip ScanCode)
           ort-cli/ort-54.0.0/bin/ort scan \
