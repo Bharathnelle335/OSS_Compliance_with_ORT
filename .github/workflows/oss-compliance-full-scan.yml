@@ -1,4 +1,4 @@
-name: ORT Full Scan (CLI Version with SCANOSS)
+name: ORT Full Scan (with SCANOSS only)
 
 on:
   workflow_dispatch:
@@ -6,19 +6,19 @@ on:
       scan_type:
         description: 'Select scan input type'
         required: true
-        default: 'upload-zip'
+        default: 'git'
         type: choice
         options:
+          - git
           - upload-zip
           - upload-tar
-          - git
 
       git_url:
-        description: 'Git repository URL (only required if scan_type is git)'
+        description: 'Git repository URL (if scan_type is git)'
         required: false
 
 jobs:
-  ort-full-scan:
+  ort-full:
     runs-on: ubuntu-latest
 
     steps:
@@ -36,76 +36,71 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install Python dependencies including SCANOSS
+      - name: Install Dependencies
         run: |
           python3 -m pip install --upgrade pip
-          python3 -m pip install --user scanoss pandas openpyxl
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          pip install scanoss pandas openpyxl || true
 
-      - name: Extract uploaded ZIP source
-        if: ${{ github.event.inputs.scan_type == 'upload-zip' }}
+      - name: Prepare Input Based on Scan Type
         run: |
-          mkdir -p uploaded-source
-          unzip "*.zip" -d uploaded-source
-
-      - name: Extract uploaded image TAR
-        if: ${{ github.event.inputs.scan_type == 'upload-tar' }}
-        run: |
-          mkdir -p extracted-tar
-          file=$(find . -maxdepth 1 -type f \( -iname "*.tar" -o -iname "*.tar.gz" -o -iname "*.tgz" \) | head -n 1)
-          if [ -z "$file" ]; then
-            echo "❌ No .tar or .tar.gz file found."
-            exit 1
+          if [ "${{ github.event.inputs.scan_type }}" == "upload-zip" ]; then
+            mkdir -p uploaded-source
+            unzip *.zip -d uploaded-source
+            scan_path="uploaded-source"
+          elif [ "${{ github.event.inputs.scan_type }}" == "upload-tar" ]; then
+            mkdir -p extracted-tar
+            tar -xf *.tar* -C extracted-tar
+            scan_path="extracted-tar"
+          elif [ "${{ github.event.inputs.scan_type }}" == "git" ]; then
+            git clone --depth 1 "${{ github.event.inputs.git_url }}" repo-to-scan
+            scan_path="repo-to-scan"
           fi
-          tar -xf "$file" -C extracted-tar
-
-      - name: Clone Git Repository to Scan
-        if: ${{ github.event.inputs.scan_type == 'git' }}
-        run: |
-          git clone ${{ github.event.inputs.git_url }} repo-to-scan
-
-      - name: Clean ORT output directories
-        run: |
-          rm -rf ort-output
-          rm -rf /home/runner/.ort
-
-      - name: Set scan_path variable
-        run: |
-          if [ "${{ github.event.inputs.scan_type }}" == "upload-zip" ]; then scan_path="uploaded-source";
-          elif [ "${{ github.event.inputs.scan_type }}" == "upload-tar" ]; then scan_path="extracted-tar";
-          elif [ "${{ github.event.inputs.scan_type }}" == "git" ]; then scan_path="repo-to-scan"; fi
           echo "scan_path=$scan_path" >> $GITHUB_ENV
 
-      - name: Download and Extract ORT CLI (v54.0.0)
+      - name: Download and Extract ORT CLI
         run: |
-          curl -L --fail --retry 3 -o ort.zip https://github.com/oss-review-toolkit/ort/releases/download/54.0.0/ort-54.0.0.zip
+          curl -L -o ort.zip https://github.com/oss-review-toolkit/ort/releases/download/54.0.0/ort-54.0.0.zip
           unzip ort.zip -d ort-cli
           chmod +x ort-cli/ort-54.0.0/bin/ort
 
-      - name: Copy ORT config into expected path
+      - name: Clean Output Folders
+        run: |
+          rm -rf ort-output
+          mkdir -p ort-output/analyzer
+          mkdir -p ort-output/scanner
+          mkdir -p ort-output/advisor
+          mkdir -p ort-output/evaluator
+          mkdir -p ort-output/report
+          rm -rf /home/runner/.ort
+
+      - name: Copy ORT Config
         run: |
           mkdir -p /home/runner/.ort/config
-          cp .ort/config/config.yml /home/runner/.ort/config/config.yml
+          cp .ort/config/config.yml /home/runner/.ort/config/config.yml || true
 
-      - name: Run ORT Analyze
+      - name: ORT Analyze
         run: |
-          ort-cli/ort-54.0.0/bin/ort analyze -i "$scan_path" -o ort-output/analyzer || true
+          ort-cli/ort-54.0.0/bin/ort analyze \
+            -i "$scan_path" \
+            -o ort-output/analyzer || true
 
-      - name: Run SCANOSS (Python CLI)
+      - name: SCANOSS Scan
         run: |
-          mkdir -p ort-output/scanner
-          python3 -m scanoss.cli scan -o ort-output/scanner/scanoss.spdx.json "$scan_path" || echo "⚠ SCANOSS scan failed, continuing."
+          python3 -m scanoss.cli scan \
+            -o ort-output/scanner/scanoss.spdx.json "$scan_path" || echo "⚠ SCANOSS failed"
 
-      - name: Run ORT Advise (if scan result exists)
+      - name: ORT Advisor (uses analyzer output only)
+        if: ${{ always() }}
         run: |
-          if [ -f ort-output/scanner/scanoss.spdx.json ]; then
+          if [ -f ort-output/analyzer/analyzer-result.yml ]; then
             ort-cli/ort-54.0.0/bin/ort advise \
-              -i ort-output/scanner/scanoss.spdx.json \
+              -i ort-output/analyzer/analyzer-result.yml \
               -o ort-output/advisor \
               --advisors OSV || true
           fi
 
-      - name: Run ORT Evaluate (if advisor result exists)
+      - name: ORT Evaluate
+        if: ${{ always() }}
         run: |
           if [ -f ort-output/advisor/advisor-result.yml ]; then
             ort-cli/ort-54.0.0/bin/ort evaluate \
@@ -113,7 +108,8 @@ jobs:
               -o ort-output/evaluator || true
           fi
 
-      - name: Run ORT WebApp Report
+      - name: ORT WebApp Report
+        if: ${{ always() }}
         run: |
           if [ -f ort-output/analyzer/analyzer-result.yml ] && \
              [ -f ort-output/advisor/advisor-result.yml ] && \
@@ -125,16 +121,11 @@ jobs:
               -o ort-output/report \
               -f WebApp
           else
-            echo "⚠ Skipping WebApp report: Required input files not found."
+            echo "⚠ Skipping WebApp report: Required inputs missing."
           fi
 
-      - name: Generate Excel from ORT Full Pipeline Output
-        run: |
-          pip install pandas openpyxl pyyaml || true
-          python3 generate_excel_from_ort_full.py ort-output/analyzer/analyzer-result.yml ort-output/evaluator/evaluation-result.yml ort-output/advisor/advisor-result.yml ort-output/scanner/scanoss.spdx.json || true
-
-      - name: Upload ORT Artifacts
+      - name: Upload ORT + SCANOSS Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ort-full-pipeline-results
+          name: ort-full-output
           path: ort-output/
