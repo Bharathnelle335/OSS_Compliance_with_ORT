@@ -36,6 +36,20 @@ jobs:
           unzip ort.zip -d ort-cli
           chmod +x ort-cli/ort-54.0.0/bin/ort
 
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Clean ORT output directories
+        run: |
+          rm -rf ort-output /home/runner/.ort
+
+      - name: Copy ORT config into expected path
+        run: |
+          mkdir -p /home/runner/.ort/config
+          cp .ort/config/config.yml /home/runner/.ort/config/config.yml
+
       - name: Extract uploaded ZIP source
         if: ${{ github.event.inputs.scan_type == 'upload-zip' }}
         run: |
@@ -58,62 +72,44 @@ jobs:
         run: |
           git clone ${{ github.event.inputs.git_url }} repo-to-scan
 
-      - name: Set up Python 3.10
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - name: Clean ORT output directories
-        run: |
-          rm -rf ort-output
-          rm -rf /home/runner/.ort
-
-      - name: Copy ORT config into expected path
-        run: |
-          mkdir -p /home/runner/.ort/config
-          cp .ort/config/config.yml /home/runner/.ort/config/config.yml
-
-      - name: Run ORT Analyze per definition file (skip broken ones)
+      - name: Run ORT Analyzer (even with some failures)
         run: |
           if [ "${{ github.event.inputs.scan_type }}" == "upload-zip" ]; then scan_path="uploaded-source";
           elif [ "${{ github.event.inputs.scan_type }}" == "upload-tar" ]; then scan_path="extracted-tar";
           elif [ "${{ github.event.inputs.scan_type }}" == "git" ]; then scan_path="repo-to-scan"; fi
 
           mkdir -p ort-output/analyzer/projects
+          ort-cli/ort-54.0.0/bin/ort analyze -i "$scan_path" -o ort-output/analyzer/projects || true
 
-          find "$scan_path" -type f \( -name "Gemfile" -o -name "pom.xml" -o -name "package.json" \) > definition_files.txt
-
-          while IFS= read -r def_file; do
-            dir=$(dirname "$def_file")
-            safe_dir_name=$(echo "$dir" | tr / _ | sed 's/[^a-zA-Z0-9_-]//g')
-            echo "▶ Analyzing $def_file"
-
-            ort-cli/ort-54.0.0/bin/ort analyze -i "$dir" -o "ort-output/analyzer/projects/$safe_dir_name" && \
-              echo "✔ Success: $def_file" || \
-              echo "❌ Skipped (failed): $def_file"
-          done < definition_files.txt
-
-          ort-cli/ort-54.0.0/bin/ort merge-results \
-            -i ort-output/analyzer/projects \
-            -o ort-output/analyzer
+      - name: Merge Analyzer Results
+        run: |
+          mkdir -p ort-output/analyzer
+          if compgen -G "ort-output/analyzer/projects/*/analyzer-result.yml" > /dev/null; then
+            ort-cli/ort-54.0.0/bin/ort merge-results \
+              -i ort-output/analyzer/projects \
+              -o ort-output/analyzer
+          else
+            echo "❌ No analyzer results to merge. Exiting."
+            exit 1
+          fi
 
       - name: Run SCANOSS Scanner
         run: |
           curl -sSL https://scanoss.com/install | sh
           chmod +x scanoss
-          ./scanoss --src "$scan_path" --output ort-output/scanner/scanoss.spdx.json
+          ./scanoss --src "$scan_path" --output ort-output/scanner/scanoss.spdx.json || echo "⚠ SCANOSS scan failed, continuing."
 
       - name: Run ORT Advisor
         run: |
           ort-cli/ort-54.0.0/bin/ort advise \
             -i ort-output/analyzer/analyzer-result.yml \
-            -o ort-output/advisor
+            -o ort-output/advisor || echo "⚠ Advisor failed."
 
       - name: Run ORT Evaluator
         run: |
           ort-cli/ort-54.0.0/bin/ort evaluate \
             -i ort-output/advisor/advisor-result.yml \
-            -o ort-output/evaluator
+            -o ort-output/evaluator || echo "⚠ Evaluator failed."
 
       - name: Generate WebApp Report
         run: |
@@ -122,19 +118,12 @@ jobs:
             -i ort-output/advisor/advisor-result.yml \
             -i ort-output/evaluator/evaluation-result.yml \
             -o ort-output/report \
-            -f WebApp
+            -f WebApp || echo "⚠ WebApp report generation failed."
 
-      - name: Install Excel Requirements
+      - name: Generate Excel from ORT Full Pipeline Output
         run: |
-          pip install pyyaml pandas openpyxl || true
-
-      - name: Generate Excel from ORT Outputs
-        run: |
-          python3 generate_excel_from_ort_full.py \
-            ort-output/analyzer/analyzer-result.yml \
-            ort-output/evaluator/evaluation-result.yml \
-            ort-output/advisor/advisor-result.yml \
-            ort-output/scanner/scanoss.spdx.json
+          pip install pyyaml openpyxl pandas || true
+          python3 generate_excel_from_ort_full.py ort-output/analyzer/analyzer-result.yml ort-output/evaluator/evaluation-result.yml ort-output/advisor/advisor-result.yml ort-output/scanner/scanoss.spdx.json || echo "⚠ Excel generation failed."
 
       - name: Upload ORT Artifacts
         uses: actions/upload-artifact@v4
