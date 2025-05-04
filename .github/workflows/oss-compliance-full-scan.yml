@@ -77,7 +77,7 @@ jobs:
         run: |
           mkdir -p /home/runner/.ort/config/evaluation
           cp .ort/config/config.yml /home/runner/.ort/config/config.yml
-          cp .ort/config/evaluation/rules.kts /home/runner/.ort/config/evaluation/rules.kts
+          cp .ort/config/rules.kts /home/runner/.ort/config/evaluation/rules.kts
 
       - name: ORT Analyze
         run: |
