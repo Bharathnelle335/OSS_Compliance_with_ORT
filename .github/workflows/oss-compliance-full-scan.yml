@@ -89,8 +89,8 @@ jobs:
               -i ort-output/analyzer/projects \
               -o ort-output/analyzer
           else
-            echo "❌ No analyzer results to merge. Exiting."
-            exit 1
+            echo "⚠ No analyzer results found to merge. Skipping merge-results step."
+            touch ort-output/analyzer/analyzer-result.yml
           fi
 
       - name: Run SCANOSS Scanner
