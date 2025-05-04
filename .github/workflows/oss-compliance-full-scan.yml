@@ -76,8 +76,8 @@ jobs:
       - name: Copy ORT config into expected path
         run: |
           mkdir -p /home/runner/.ort/config/evaluation
-          cp .ort/config/config.yml /home/runner/.ort/config/config.yml
-          cp .ort/config/rules.kts /home/runner/.ort/config/evaluation/rules.kts
+          cp .ort/config/config.yml /home/runner/.ort/config/config.yml || true
+          cp .ort/evaluator/rules.kts /home/runner/.ort/config/evaluation/rules.kts
 
       - name: ORT Analyze
         run: |
