@@ -1,184 +1,55 @@
-import sys
+import os
 import json
 import pandas as pd
-from collections import defaultdict
-import requests
-import time
-import os
 
-# Determine scan source identifier (docker image or git URL or tar/zip upload)
-image_name = os.getenv("IMAGE_NAME", "scan").replace(":", "_").replace("/", "_").replace("@", "_")
-
-# File names
-syft_file = "syft-sbom.spdx.json"
-grype_file = "grype-scan.json"
-scanoss_file = "scanoss-results.json"
-
-# Output file names
-excel_out = f"{image_name}_compliance_merged_report.xlsx"
-json_out = f"{image_name}_compliance_merged_report.json"
-grype_excel = f"{image_name}_grype_components_report.xlsx"
-scanoss_excel = f"{image_name}_scanoss_components_report.xlsx"
-syft_excel = f"{image_name}_syft_components_report.xlsx"
-
-def parse_syft(filepath):
-    if not os.path.exists(filepath):
-        return []
-    with open(filepath, 'r') as f:
-        data = json.load(f)
+def extract_ort_data(ort_analyzer_path, ort_report_path):
     components = []
-    for item in data.get("packages", []):
-        name = item.get("name")
-        version = item.get("versionInfo") or item.get("version")
-        license = item.get("licenseDeclared")
-        components.append({
-            "component": name,
-            "version": version,
-            "source": "syft",
-            "license": license,
-            "license_source": "syft" if license else "",
-            "enriched_license": None,
-            "license_url": "unknown"
-        })
+
+    # Load analyzer-result.json
+    with open(ort_analyzer_path, 'r', encoding='utf-8') as f:
+        analyzer_data = json.load(f)
+
+    projects = analyzer_data.get('analyzer', {}).get('result', {}).get('projects', [])
+    for project in projects:
+        for scope in project.get('scopes', []):
+            for pkg in scope.get('dependencies', []):
+                name = pkg.get('id', '').split(':')[1] if ':' in pkg.get('id', '') else pkg.get('id', '')
+                version = pkg.get('id', '').split(':')[2] if ':' in pkg.get('id', '') else 'unknown'
+                components.append({
+                    'component': name,
+                    'version': version,
+                    'license': 'N/A',
+                    'license_source': 'ORT Analyzer',
+                    'license_url': 'N/A'
+                })
+
+    # Load ort-report.json if available and override license info
+    if os.path.exists(ort_report_path):
+        with open(ort_report_path, 'r', encoding='utf-8') as f:
+            report_data = json.load(f)
+
+        findings = report_data.get('report', {}).get('licenseFindings', [])
+        for finding in findings:
+            pkg_name = finding.get('packageId', '').split(':')[1]
+            license_name = finding.get('license')
+            for comp in components:
+                if comp['component'] == pkg_name:
+                    comp['license'] = license_name
+                    comp['license_source'] = 'ORT Report'
+                    comp['license_url'] = 'unknown'
+
     return components
 
-def parse_grype(filepath):
-    if not os.path.exists(filepath):
-        return defaultdict(str), []
-    with open(filepath, 'r') as f:
-        data = json.load(f)
-    licenses = defaultdict(str)
-    grype_rows = []
-    for match in data.get("matches", []):
-        pkg = match.get("artifact", {})
-        name = pkg.get("name")
-        version = pkg.get("version")
-        license_list = match.get("licenses", [])
-        license = license_list[0].get("spdx") if license_list else pkg.get("license")
-        if name and version:
-            key = f"{name}@{version}"
-            licenses[key] = license
-            grype_rows.append({
-                "component": name,
-                "version": version,
-                "source": "grype",
-                "license": license,
-                "license_source": "grype",
-                "enriched_license": None,
-                "license_url": "unknown"
-            })
-    return licenses, grype_rows
+def save_to_excel(data, image_name):
+    df = pd.DataFrame(data)
+    excel_name = f"{image_name}_ort_components_report.xlsx"
+    df.to_excel(excel_name, index=False)
+    print(f"✅ Excel report generated: {excel_name}")
 
-def parse_scanoss(filepath):
-    if not os.path.exists(filepath):
-        return []
-    try:
-        with open(filepath, 'r') as f:
-            data = json.load(f)
+if __name__ == "__main__":
+    analyzer_result_file = "ort-output/analyzer/analyzer-result.json"
+    report_result_file = "ort-output/report/ort-report.json"
+    docker_image = os.getenv("IMAGE_NAME", "unknown-image").replace(":", "_").replace("/", "_")
 
-        matched = []
-        for entry_list in data.values():
-            for match in entry_list:
-                component = match.get("component")
-                version = match.get("version") or match.get("latest")
-                license_objs = match.get("licenses", [])
-                license_names = [lic.get("name") for lic in license_objs if "name" in lic]
-                license_combined = ", ".join(license_names) if license_names else None
-                license_url = license_objs[0].get("url") if license_objs and "url" in license_objs[0] else "unknown"
-
-                if component:
-                    matched.append({
-                        "component": component,
-                        "version": version,
-                        "source": "scanoss",
-                        "license": license_combined,
-                        "license_source": "scanoss",
-                        "enriched_license": None,
-                        "license_url": license_url
-                    })
-        return matched
-    except Exception as e:
-        print(f"[ERROR] Failed to parse SCANOSS JSON: {e}")
-        return []
-
-def enrich_license(component):
-    name = component["component"]
-    version = component["version"] or ""
-    headers = {"Accept": "application/json"}
-
-    try:
-        time.sleep(0.2)
-        url = f"https://api.github.com/repos/{name}/license"
-        r = requests.get(url, headers=headers)
-        if r.status_code == 200:
-            data = r.json()
-            return data.get("license", {}).get("spdx_id"), url
-    except: pass
-
-    try:
-        time.sleep(0.2)
-        url = f"https://registry.npmjs.org/{name}"
-        r = requests.get(url)
-        if r.status_code == 200:
-            data = r.json()
-            license = data.get("license")
-            return license, url
-    except: pass
-
-    try:
-        time.sleep(0.2)
-        url = f"https://pypi.org/pypi/{name}/json"
-        r = requests.get(url)
-        if r.status_code == 200:
-            data = r.json()
-            license = data.get("info", {}).get("license")
-            return license, url
-    except: pass
-
-    return None, "unknown"
-
-# Load components from all sources
-syft_components = parse_syft(syft_file)
-grype_licenses, grype_components = parse_grype(grype_file)
-scanoss_components = parse_scanoss(scanoss_file)
-
-# Enrich Syft entries
-for comp in syft_components:
-    key = f"{comp['component']}@{comp['version']}"
-    if not comp["license"] and key in grype_licenses:
-        comp["license"] = grype_licenses[key]
-        comp["license_source"] = "grype"
-    enriched_license, license_url = enrich_license(comp)
-    if enriched_license:
-        comp["enriched_license"] = enriched_license
-        comp["license_url"] = license_url
-
-# Combine
-merged = syft_components + scanoss_components
-
-# Save merged Excel & JSON
-df_merged = pd.DataFrame(merged).drop_duplicates(subset=["component", "version", "license", "enriched_license"])
-df_merged.to_excel(excel_out, index=False)
-df_merged.to_json(json_out, orient="records", indent=2)
-
-# Save others
-df_grype = pd.DataFrame(grype_components).drop_duplicates()
-df_grype.to_excel(grype_excel, index=False)
-
-df_scanoss = pd.DataFrame(scanoss_components).drop_duplicates()
-df_scanoss.to_excel(scanoss_excel, index=False)
-
-df_syft = pd.DataFrame(syft_components)
-if not df_syft.empty:
-    df_syft = df_syft[["component", "version", "license", "license_source", "license_url"]].drop_duplicates()
-else:
-    df_syft = pd.DataFrame(columns=["component", "version", "license", "license_source", "license_url"])
-df_syft.to_excel(syft_excel, index=False)
-
-# Optional: Show if ORT scan data exists
-if os.path.exists("ort-output"):
-    print("✅ ORT output folder found and zipped.")
-else:
-    print("⚠️ ORT output folder not found.")
-
-print(f"✅ Reports generated for: {image_name}")
+    components = extract_ort_data(analyzer_result_file, report_result_file)
+    save_to_excel(components, docker_image)
