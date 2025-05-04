@@ -32,7 +32,19 @@ ort:
   scanner:
     skip_concluded: false
     skip_excluded: false
-    archive: true                 # Extract and scan archives (e.g. .zip, .tar)
-    detect_license_texts: true   # Enables scanning of raw license texts (extra effort but better detection)
-    ignore_patterns: [ ]          # You can add glob patterns to skip scanning files (if needed)
+    archive: true
+    detect_license_texts: true
+    ignore_patterns: []
 
+  advisor:
+    enabled: true
+    options:
+      osv:
+        server_url: "https://api.osv.dev"
+
+  evaluator:
+    enabled: true
+    options:
+      rules:
+        allow_dynamic_versions: true
+        rule_set: "rules.kts"
