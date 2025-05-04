@@ -65,6 +65,8 @@ jobs:
           cp .ort/config/config.yml /home/runner/.ort/config/config.yml
 
       - name: Run ORT Analyze and Report (CLI)
+        env:
+          ORT_CONFIG_DIR: /home/runner/.ort/config
         run: |
           if [ "${{ github.event.inputs.scan_type }}" == "upload-zip" ]; then scan_path="uploaded-source";
           elif [ "${{ github.event.inputs.scan_type }}" == "upload-tar" ]; then scan_path="extracted-tar";

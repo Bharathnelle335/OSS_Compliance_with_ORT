@@ -2,7 +2,37 @@ ort:
   analyzer:
     allow_dynamic_versions: true
     enabled_package_managers:
+      - Maven
+      - Gradle
+      - NPM
+      - PNPM
+      - Yarn
+      - Yarn 2+
+      - PIP
+      - Pipenv
+      - Poetry
+      - NuGet
       - Bundler
+      - Cargo
+      - GoMod
+      - Composer
+      - Pub
+      - SBT
+      - Stack
+      - Swift Package Manager
+      - CocoaPods
+      - Carthage
+      - Conan
+      - Bazel
+      - Bower
+      - Tycho
+      - SpdxDocumentFile
+      - Unmanaged
+
   scanner:
     skip_concluded: false
     skip_excluded: false
+    archive: true                 # Extract and scan archives (e.g. .zip, .tar)
+    detect_license_texts: true   # Enables scanning of raw license texts (extra effort but better detection)
+    ignore_patterns: [ ]          # You can add glob patterns to skip scanning files (if needed)
+
