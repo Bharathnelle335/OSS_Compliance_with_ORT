@@ -14,7 +14,7 @@ on:
           - git
 
       git_url:
-        description: 'Git repository URL (required if scan_type is git)'
+        description: 'Git repository URL (only required if scan_type is git)'
         required: false
 
 jobs:
@@ -59,21 +59,12 @@ jobs:
         run: |
           git clone ${{ github.event.inputs.git_url }} repo-to-scan
 
-      - name: Add ORT config to allow dynamic versions
+      - name: Copy ORT config into expected path
         run: |
-          mkdir -p ~/.ort/config
-          cat <<EOF > ~/.ort/config/config.yml
-          ort:
-            analyzer:
-              allow_dynamic_versions: true
-              enabled_package_managers:
-                - Bundler
-            scanner:
-              skip_concluded: false
-              skip_excluded: false
-          EOF
+          mkdir -p /home/runner/.ort/config
+          cp .ort/config/config.yml /home/runner/.ort/config/config.yml
 
-      - name: Run ORT Analyze + Report
+      - name: Run ORT Analyze and Report (CLI)
         run: |
           if [ "${{ github.event.inputs.scan_type }}" == "upload-zip" ]; then scan_path="uploaded-source";
           elif [ "${{ github.event.inputs.scan_type }}" == "upload-tar" ]; then scan_path="extracted-tar";
@@ -81,7 +72,8 @@ jobs:
 
           mkdir -p ort-output
 
-          ort-cli/ort-54.0.0/bin/ort analyze -i "$scan_path" -o ort-output/analyzer
+          # Allow scan to continue even if unresolved issues exist (non-fatal)
+          ort-cli/ort-54.0.0/bin/ort analyze -i "$scan_path" -o ort-output/analyzer || true
           ort-cli/ort-54.0.0/bin/ort report -i ort-output/analyzer -o ort-output/report -f WebApp
 
       - name: Upload ORT Artifacts
@@ -90,4 +82,3 @@ jobs:
           name: ort-cli-results
           path: |
             ort-output/
-            ort-output.zip
