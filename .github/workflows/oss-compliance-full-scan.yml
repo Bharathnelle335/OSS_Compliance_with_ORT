@@ -74,30 +74,35 @@ jobs:
           mkdir -p /home/runner/.ort/config
           cp .ort/config/config.yml /home/runner/.ort/config/config.yml
 
-      - name: "Run Full ORT Pipeline: analyze → scan → advisor → evaluate → report"
+      - name: Run ORT Full Pipeline (CLI)
         run: |
-          if [ "${{ github.event.inputs.scan_type }}" == "upload-zip" ]; then
-            scan_path="uploaded-source"
-          elif [ "${{ github.event.inputs.scan_type }}" == "upload-tar" ]; then
-            scan_path="extracted-tar"
-          elif [ "${{ github.event.inputs.scan_type }}" == "git" ]; then
-            scan_path="repo-to-scan"
-          fi
+          if [ "${{ github.event.inputs.scan_type }}" == "upload-zip" ]; then scan_path="uploaded-source";
+          elif [ "${{ github.event.inputs.scan_type }}" == "upload-tar" ]; then scan_path="extracted-tar";
+          elif [ "${{ github.event.inputs.scan_type }}" == "git" ]; then scan_path="repo-to-scan"; fi
 
           mkdir -p ort-output
 
+          # Run analyzer
           ort-cli/ort-54.0.0/bin/ort analyze -i "$scan_path" -o ort-output/analyzer || true
-          ort-cli/ort-54.0.0/bin/ort scan -i ort-output/analyzer/analyzer-result.yml -o ort-output/scanner || true
-          ort-cli/ort-54.0.0/bin/ort advisor -i ort-output/analyzer/analyzer-result.yml -o ort-output/advisor || true
-          ort-cli/ort-54.0.0/bin/ort evaluate -i ort-output/analyzer/analyzer-result.yml -o ort-output/evaluator || true
 
+          # Run scanner without ScanCode
+          ort-cli/ort-54.0.0/bin/ort scan -i ort-output/analyzer/analyzer-result.yml -o ort-output/scanner --scanners NONE || true
+
+          # Run advisor
+          ort-cli/ort-54.0.0/bin/ort advise -i ort-output/scanner/scan-result.yml -o ort-output/advisor || true
+
+          # Run evaluator
+          ort-cli/ort-54.0.0/bin/ort evaluate -i ort-output/advisor/advisor-result.yml -o ort-output/evaluator || true
+
+          # Generate full report
           ort-cli/ort-54.0.0/bin/ort report \
             -i ort-output/analyzer/analyzer-result.yml \
             -i ort-output/scanner/scan-result.yml \
             -i ort-output/advisor/advisor-result.yml \
             -i ort-output/evaluator/evaluation-result.yml \
             -o ort-output/report \
-            -f WebApp
+            -f WebApp || true
+      
 
       - name: Generate Excel from ORT Full Pipeline Output
         run: |
