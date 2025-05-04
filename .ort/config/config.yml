@@ -1,0 +1,3 @@
+ort:
+  analyzer:
+    allow_dynamic_versions: true
