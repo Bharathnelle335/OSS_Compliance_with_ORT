@@ -82,26 +82,34 @@ jobs:
 
           mkdir -p ort-output
 
-          # Run analyzer
-          ort-cli/ort-54.0.0/bin/ort analyze -i "$scan_path" -o ort-output/analyzer || true
+          # 1. Analyze
+          ort-cli/ort-54.0.0/bin/ort analyze -i "$scan_path" -o ort-output/analyzer
 
-          # Run scanner without ScanCode
-          ort-cli/ort-54.0.0/bin/ort scan -i ort-output/analyzer/analyzer-result.yml -o ort-output/scanner --scanners NONE || true
+          # 2. Scan with NONE (to skip ScanCode)
+          ort-cli/ort-54.0.0/bin/ort scan \
+            -i ort-output/analyzer/analyzer-result.yml \
+            -o ort-output/scanner \
+            --scanners NONE
 
-          # Run advisor
-          ort-cli/ort-54.0.0/bin/ort advise -i ort-output/scanner/scan-result.yml -o ort-output/advisor || true
+          # 3. Advisor (works even if scan used NONE, for package managers like Maven, NPM etc.)
+          ort-cli/ort-54.0.0/bin/ort advise \
+            -i ort-output/scanner/scan-result.yml \
+            -o ort-output/advisor
 
-          # Run evaluator
-          ort-cli/ort-54.0.0/bin/ort evaluate -i ort-output/advisor/advisor-result.yml -o ort-output/evaluator || true
+          # 4. Evaluate
+          ort-cli/ort-54.0.0/bin/ort evaluate \
+            -i ort-output/advisor/advisor-result.yml \
+            -o ort-output/evaluator
 
-          # Generate full report
+          # 5. Generate WebApp report
           ort-cli/ort-54.0.0/bin/ort report \
             -i ort-output/analyzer/analyzer-result.yml \
             -i ort-output/scanner/scan-result.yml \
             -i ort-output/advisor/advisor-result.yml \
             -i ort-output/evaluator/evaluation-result.yml \
             -o ort-output/report \
-            -f WebApp || true
+            -f WebApp
+      
       
 
       - name: Generate Excel from ORT Full Pipeline Output
