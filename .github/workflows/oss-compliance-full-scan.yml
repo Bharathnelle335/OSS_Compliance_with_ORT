@@ -106,7 +106,7 @@ jobs:
 
       - name: Generate Excel from ORT Full Pipeline Output
         run: |
-          pip install -r requirements.txt || true
+          pip install pyyaml openpyxl || true
           python3 generate_excel_from_ort_full.py ort-output/analyzer/analyzer-result.yml ort-output/evaluator/evaluation-result.yml ort-output/advisor/advisor-result.yml ort-output/scanner/scan-result.yml
 
       - name: Upload ORT Artifacts
