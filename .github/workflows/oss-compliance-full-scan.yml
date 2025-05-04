@@ -101,11 +101,12 @@ jobs:
           fi
 
       - name: Run ORT Evaluate (if advisor result exists)
-        if: ${{ exists('ort-output/advisor/advisor-result.yml') }}
         run: |
-          ort-cli/ort-54.0.0/bin/ort evaluate \
-            -i ort-output/advisor/advisor-result.yml \
-            -o ort-output/evaluator || true
+          if [ -f ort-output/advisor/advisor-result.yml ]; then
+            ort-cli/ort-54.0.0/bin/ort evaluate \
+              -i ort-output/advisor/advisor-result.yml \
+              -o ort-output/evaluator || true
+          fi
         env:
           JAVA_HOME: ${{ env.JAVA_HOME }}
           ORT_CONFIG_DIR: .ort/config
