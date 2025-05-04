@@ -88,10 +88,11 @@ jobs:
       - name: Install and Run SCANOSS CLI
         run: |
           mkdir -p ort-output/scanner
-          curl -L -o scanoss https://github.com/SCANOSS/scanoss.cli/releases/latest/download/scanoss-linux
+          curl -L -H "Accept: application/octet-stream" \
+            -o scanoss https://github.com/SCANOSS/scanoss.cli/releases/latest/download/scanoss-linux
           chmod +x scanoss
           ./scanoss --src "$scan_path" --output ort-output/scanner/scanoss.spdx.json || echo "⚠ SCANOSS scan failed, continuing."
-
+      
       - name: Run ORT Advise (if scan result exists)
         run: |
           if [ -f ort-output/scanner/scanoss.spdx.json ]; then
