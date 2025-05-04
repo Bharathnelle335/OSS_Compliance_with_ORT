@@ -95,12 +95,13 @@ jobs:
             echo "⚠ No analyzer results to merge, continuing anyway."
           fi
 
-      - name: Run SCANOSS Scanner
+      - name: Install and Run SCANOSS CLI
         run: |
-          curl -sSL https://raw.githubusercontent.com/scanoss/scanoss.cli/main/install.sh | sh
+          mkdir -p ort-output/scanner
+          curl -L -o scanoss https://github.com/SCANOSS/scanoss.cli/releases/latest/download/scanoss-linux
           chmod +x scanoss
-          ./scanoss --src "${{ steps.set-path.outputs.scan_path }}" --output ort-output/scanner/scanoss.spdx.json || echo "⚠ SCANOSS scan failed."
-
+          ./scanoss --src "$scan_path" --output ort-output/scanner/scanoss.spdx.json || echo "⚠ SCANOSS scan failed, continuing."
+      
       - name: Run Advisor
         run: |
           ort-cli/ort-54.0.0/bin/ort advise \
