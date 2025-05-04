@@ -105,11 +105,11 @@ jobs:
           if [ -f ort-output/advisor/advisor-result.yml ]; then
             ort-cli/ort-54.0.0/bin/ort evaluate \
               -i ort-output/advisor/advisor-result.yml \
-              -o ort-output/evaluator || true
+              -o ort-output/evaluator \
+              --rules .ort/config/evaluation/rules.kts || true
           fi
         env:
           JAVA_HOME: ${{ env.JAVA_HOME }}
-          ORT_CONFIG_DIR: .ort/config
 
       - name: ORT WebApp Report
         if: ${{ always() }}
