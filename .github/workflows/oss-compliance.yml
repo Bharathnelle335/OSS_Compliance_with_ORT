@@ -59,6 +59,20 @@ jobs:
         run: |
           git clone ${{ github.event.inputs.git_url }} repo-to-scan
 
+      - name: Add ORT config to allow dynamic versions
+        run: |
+          mkdir -p ~/.ort/config
+          cat <<EOF > ~/.ort/config/config.yml
+          ort:
+            analyzer:
+              allow_dynamic_versions: true
+              enabled_package_managers:
+                - Bundler
+            scanner:
+              skip_concluded: false
+              skip_excluded: false
+          EOF
+
       - name: Run ORT Analyze + Report
         run: |
           if [ "${{ github.event.inputs.scan_type }}" == "upload-zip" ]; then scan_path="uploaded-source";

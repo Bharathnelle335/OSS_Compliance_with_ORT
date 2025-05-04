@@ -1,3 +1,8 @@
 ort:
   analyzer:
     allow_dynamic_versions: true
+    enabled_package_managers:
+      - Bundler
+  scanner:
+    skip_concluded: false
+    skip_excluded: false
