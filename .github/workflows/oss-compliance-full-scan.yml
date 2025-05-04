@@ -101,7 +101,8 @@ jobs:
           if [ -f ort-output/scanner/scanoss.spdx.json ]; then
             ort-cli/ort-54.0.0/bin/ort advise \
               -i ort-output/scanner/scanoss.spdx.json \
-              -o ort-output/advisor || true
+              -o ort-output/advisor \
+              --advisors OSV || true
           fi
 
       - name: Run ORT Evaluate (if advisor result exists)
@@ -112,7 +113,7 @@ jobs:
               -o ort-output/evaluator || true
           fi
 
-      - name: Run ORT WebApp Report (if all inputs exist)
+      - name: Run ORT WebApp Report
         run: |
           if [ -f ort-output/analyzer/analyzer-result.yml ] && \
              [ -f ort-output/advisor/advisor-result.yml ] && \
