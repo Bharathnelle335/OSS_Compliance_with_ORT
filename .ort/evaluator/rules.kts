@@ -1,11 +1,8 @@
-@file:Repository("https://repo.maven.apache.org/maven2/")
-@file:DependsOn("org.ossreviewtoolkit:ort-evaluator:54.0.0")
-
-import org.ossreviewtoolkit.evaluator.rules
+import org.ossreviewtoolkit.evaluator.RuleSet
 import org.ossreviewtoolkit.evaluator.Severity
 
-rules {
-    rule("NO_MEDIUM_OR_HIGH_VULNERABILITIES") {
+val rules = RuleSet("NO_MEDIUM_OR_HIGH_VULNERABILITIES") {
+    rule("No medium or high severity vulnerabilities") {
         severity = Severity.HINT
 
         condition {
