@@ -108,25 +108,34 @@ jobs:
               -o ort-output/evaluator \
                 --rules-file /home/runner/.ort/config/evaluation/rules.kts || true 
           fi
-          
+
         env:
           JAVA_HOME: ${{ env.JAVA_HOME }}
 
-      - name: ORT WebApp Report
-        if: ${{ always() }}
+      - name: ORT WebApp Report (flexible input support)
         run: |
-          if [ -f ort-output/analyzer/analyzer-result.yml ] && \
-             [ -f ort-output/advisor/advisor-result.yml ] && \
-             [ -f ort-output/evaluator/evaluation-result.yml ]; then
-            ort-cli/ort-54.0.0/bin/ort report \
-              -i ort-output/analyzer/analyzer-result.yml \
-              -i ort-output/advisor/advisor-result.yml \
-              -i ort-output/evaluator/evaluation-result.yml \
-              -o ort-output/report \
-              -f WebApp
-          else
-            echo "⚠ Skipping WebApp report: Required inputs missing."
+          inputs=""
+          if [ -f ort-output/analyzer/analyzer-result.yml ]; then
+            inputs="$inputs -i ort-output/analyzer/analyzer-result.yml"
           fi
+          if [ -f ort-output/advisor/advisor-result.yml ]; then
+            inputs="$inputs -i ort-output/advisor/advisor-result.yml"
+          fi
+          if [ -f ort-output/evaluator/evaluation-result.yml ]; then
+            inputs="$inputs -i ort-output/evaluator/evaluation-result.yml"
+          fi
+
+          if [ -n "$inputs" ]; then
+            echo "✅ Running ORT report with available inputs: $inputs"
+            ort-cli/ort-54.0.0/bin/ort report $inputs -o ort-output/report -f WebApp
+          else
+            echo "⚠ Skipping WebApp report: No valid input files found."
+          fi
+        shell: bash
+        env:
+          JAVA_HOME: ${{ env.JAVA_HOME }}
+          ORT_CONFIG_DIR: .ort/config
+
 
       - name: Upload ORT + SCANOSS Artifacts
         uses: actions/upload-artifact@v4
