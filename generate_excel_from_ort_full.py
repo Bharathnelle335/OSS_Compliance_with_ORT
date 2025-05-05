@@ -16,7 +16,7 @@ def safe_load_yaml(path):
         with open(path, "r", encoding="utf-8") as f:
             return yaml.safe_load(f)
     else:
-        print(f"⚠️ Skipping missing file: {path}")
+        print(f"⚠️ Skipping missing file: {path}", flush=True)
         return {}
 
 # Load YAML/JSON files safely
@@ -29,7 +29,7 @@ def load_json(path):
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
     else:
-        print(f"⚠️ Skipping missing file: {path}")
+        print(f"⚠️ Skipping missing file: {path}", flush=True)
         return {}
 
 scanoss_data = load_json(scanoss_path)
@@ -55,7 +55,7 @@ if "projects" in analyzer_data:
 if "advisor" in advisor_data:
     for result in advisor_data["advisor"].get("results", []):
         if not isinstance(result, dict):
-            print(f"⚠️ Skipping malformed advisor result: {result}")
+            print(f"⚠️ Skipping malformed advisor result: {result}", flush=True)
             continue
         pkg_id = result.get("id", "unknown")
         for advisor in result.get("advisor", {}).get("issues", []):
@@ -97,19 +97,23 @@ else:
     result_df = pd.DataFrame()
 
 # Write to Excel with multiple sheets
-excel_written = False
 with pd.ExcelWriter("ort_full_scan_report.xlsx", engine="openpyxl") as writer:
+    sheet_written = False
     if not result_df.empty:
         result_df.to_excel(writer, index=False, sheet_name="ORT Full Report")
-        excel_written = True
+        sheet_written = True
     if not scanoss_df.empty:
         scanoss_df.to_excel(writer, index=False, sheet_name="SCANOSS Components")
-        excel_written = True
+        sheet_written = True
+    if not sheet_written:
+        pd.DataFrame({"message": ["No data available in any section."]}).to_excel(
+            writer, index=False, sheet_name="Summary"
+        )
 
 # Final log summary
-print("\n📋 Final Report Summary:")
-print(f"✅ Analyzer processed: {len(components)} components" if components else "⚠️ Analyzer skipped or empty")
-print(f"✅ Advisor processed: {len(vulnerabilities)} vulnerabilities" if vulnerabilities else "⚠️ Advisor skipped or empty")
-print(f"✅ Evaluator processed: {len(violations)} violations" if violations else "⚠️ Evaluator skipped or empty")
-print(f"✅ SCANOSS processed: {len(scanoss_components)} matches" if scanoss_components else "⚠️ SCANOSS skipped or empty")
-print("✅ Excel report written: ort_full_scan_report.xlsx" if excel_written else "❌ Excel report not generated (no data)")
+print("\n📋 Final Report Summary:", flush=True)
+print(f"✅ Analyzer processed: {len(components)} components" if components else "⚠️ Analyzer skipped or empty", flush=True)
+print(f"✅ Advisor processed: {len(vulnerabilities)} vulnerabilities" if vulnerabilities else "⚠️ Advisor skipped or empty", flush=True)
+print(f"✅ Evaluator processed: {len(violations)} violations" if violations else "⚠️ Evaluator skipped or empty", flush=True)
+print(f"✅ SCANOSS processed: {len(scanoss_components)} matches" if scanoss_components else "⚠️ SCANOSS skipped or empty", flush=True)
+print("✅ Excel report written: ort_full_scan_report.xlsx", flush=True)

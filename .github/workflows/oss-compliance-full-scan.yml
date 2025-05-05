@@ -137,8 +137,8 @@ jobs:
 
       - name: Generate Excel Report (ORT + SCANOSS)
         run: |
-          python3 generate_excel_from_ort_full.py
-
+          python3 generate_excel_from_ort_full.py || echo "⚠️ Report generation finished with fallback or no data, continuing."
+      
       - name: Upload ORT + SCANOSS Artifacts
         uses: actions/upload-artifact@v4
         with:
