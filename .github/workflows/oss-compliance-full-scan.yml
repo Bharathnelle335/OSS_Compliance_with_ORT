@@ -106,8 +106,9 @@ jobs:
             ort-cli/ort-54.0.0/bin/ort evaluate \
               -i ort-output/advisor/advisor-result.yml \
               -o ort-output/evaluator \
-              --rules .ort/config/evaluation/rules.kts || true
+                --rules-file /home/runner/.ort/config/evaluation/rules.kts || true 
           fi
+          
         env:
           JAVA_HOME: ${{ env.JAVA_HOME }}
 
