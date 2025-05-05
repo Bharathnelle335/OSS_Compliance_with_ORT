@@ -1,14 +1,12 @@
-import org.ossreviewtoolkit.evaluator.RuleSet
+import org.ossreviewtoolkit.evaluator.EvaluatorRun
 import org.ossreviewtoolkit.evaluator.Severity
 
-val rules = RuleSet("NO_MEDIUM_OR_HIGH_VULNERABILITIES") {
-    rule("No medium or high severity vulnerabilities") {
+rules = EvaluatorRun {
+    rule("NO_MEDIUM_OR_HIGH_VULNERABILITIES") {
         severity = Severity.HINT
-
         condition {
-            advisorIssues.none { it.severity >= Severity.MEDIUM }
+            it.advisorIssues.none { issue -> issue.severity >= Severity.MEDIUM }
         }
-
-        hint("No medium or high severity vulnerabilities found.")
+        hint("No medium or higher severity vulnerabilities found.")
     }
 }
