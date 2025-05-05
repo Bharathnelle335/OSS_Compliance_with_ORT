@@ -54,6 +54,9 @@ if "projects" in analyzer_data:
 # ORT Advisor
 if "advisor" in advisor_data:
     for result in advisor_data["advisor"].get("results", []):
+        if not isinstance(result, dict):
+            print(f"⚠️ Skipping malformed advisor result: {result}")
+            continue
         pkg_id = result.get("id", "unknown")
         for advisor in result.get("advisor", {}).get("issues", []):
             vulnerabilities.append({
@@ -94,10 +97,19 @@ else:
     result_df = pd.DataFrame()
 
 # Write to Excel with multiple sheets
+excel_written = False
 with pd.ExcelWriter("ort_full_scan_report.xlsx", engine="openpyxl") as writer:
     if not result_df.empty:
         result_df.to_excel(writer, index=False, sheet_name="ORT Full Report")
+        excel_written = True
     if not scanoss_df.empty:
         scanoss_df.to_excel(writer, index=False, sheet_name="SCANOSS Components")
+        excel_written = True
 
-print("✅ Excel report generated successfully.")
+# Final log summary
+print("\n📋 Final Report Summary:")
+print(f"✅ Analyzer processed: {len(components)} components" if components else "⚠️ Analyzer skipped or empty")
+print(f"✅ Advisor processed: {len(vulnerabilities)} vulnerabilities" if vulnerabilities else "⚠️ Advisor skipped or empty")
+print(f"✅ Evaluator processed: {len(violations)} violations" if violations else "⚠️ Evaluator skipped or empty")
+print(f"✅ SCANOSS processed: {len(scanoss_components)} matches" if scanoss_components else "⚠️ SCANOSS skipped or empty")
+print("✅ Excel report written: ort_full_scan_report.xlsx" if excel_written else "❌ Excel report not generated (no data)")
