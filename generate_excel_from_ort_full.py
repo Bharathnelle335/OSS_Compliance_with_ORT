@@ -1,22 +1,29 @@
 import yaml
+import json
 import pandas as pd
 from pathlib import Path
 
-# Define the paths to the input files
+# Define input paths
 analyzer_path = Path("ort-output/analyzer/analyzer-result.yml")
 advisor_path = Path("ort-output/advisor/advisor-result.yml")
 evaluation_path = Path("ort-output/evaluator/evaluation-result.yml")
+scanoss_path = Path("ort-output/scanner/scanoss.spdx.json")
 
-# Load YAML files
+# Load YAML and JSON
 def load_yaml(path):
     with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
+def load_json(path):
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+# Load ORT files
 analyzer_data = load_yaml(analyzer_path)
 advisor_data = load_yaml(advisor_path)
 evaluation_data = load_yaml(evaluation_path)
 
-# Extract analyzer component info
+# --- ORT Excel Report ---
 components = []
 for project in analyzer_data.get("projects", []):
     project_name = project.get("id", "unknown")
@@ -31,7 +38,6 @@ for project in analyzer_data.get("projects", []):
 
 components_df = pd.DataFrame(components)
 
-# Extract vulnerabilities from advisor results
 vulnerabilities = []
 for result in advisor_data.get("advisor", {}).get("results", []):
     pkg_id = result.get("id", "unknown")
@@ -45,7 +51,6 @@ for result in advisor_data.get("advisor", {}).get("results", []):
 
 vuln_df = pd.DataFrame(vulnerabilities)
 
-# Extract policy violations from evaluation results
 violations = []
 for rule_violation in evaluation_data.get("evaluator", {}).get("violations", []):
     violations.append({
@@ -57,10 +62,25 @@ for rule_violation in evaluation_data.get("evaluator", {}).get("violations", [])
 
 violations_df = pd.DataFrame(violations)
 
-# Merge all results
+# Merge ORT data
 result_df = components_df.merge(vuln_df, on="package_id", how="left").merge(violations_df, on="package_id", how="left")
 
-# Save to Excel
-output_file = "ort_full_scan_report.xlsx"
-result_df.to_excel(output_file, index=False)
-print(f"✅ Excel report generated: {output_file}")
+# --- SCANOSS Excel Report ---
+scanoss_components = []
+if scanoss_path.exists():
+    scanoss_data = load_json(scanoss_path)
+    for match in scanoss_data.get("matches", []):
+        scanoss_components.append({
+            "component": match.get("name", "N/A"),
+            "version": match.get("version", "N/A"),
+            "license": match.get("licenses", [{}])[0].get("name", "N/A") if match.get("licenses") else "N/A"
+        })
+
+scanoss_df = pd.DataFrame(scanoss_components)
+
+# --- Write to Excel with multiple sheets ---
+with pd.ExcelWriter("ort_full_scan_report.xlsx", engine="openpyxl") as writer:
+    result_df.to_excel(writer, index=False, sheet_name="ORT Full Report")
+    scanoss_df.to_excel(writer, index=False, sheet_name="SCANOSS Components")
+
+print("✅ Combined Excel report generated: ort_full_scan_report.xlsx")

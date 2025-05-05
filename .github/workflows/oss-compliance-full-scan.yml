@@ -39,7 +39,7 @@ jobs:
       - name: Install Dependencies
         run: |
           python3 -m pip install --upgrade pip
-          pip install scanoss pandas openpyxl || true
+          pip install scanoss pandas openpyxl pyyaml || true
 
       - name: Prepare Input Based on Scan Type
         run: |
@@ -108,7 +108,6 @@ jobs:
               -o ort-output/evaluator \
               --rules-file /home/runner/.ort/config/evaluation/rules.kts || true 
           fi
-
         env:
           JAVA_HOME: ${{ env.JAVA_HOME }}
 
@@ -136,9 +135,14 @@ jobs:
           JAVA_HOME: ${{ env.JAVA_HOME }}
           ORT_CONFIG_DIR: .ort/config
 
+      - name: Generate Excel Report (ORT + SCANOSS)
+        run: |
+          python3 generate_excel_from_ort_full.py
 
       - name: Upload ORT + SCANOSS Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ort-full-output
-          path: ort-output/
+          path: |
+            ort-output/
+            ort_full_scan_report.xlsx
