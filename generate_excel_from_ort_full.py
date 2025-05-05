@@ -19,11 +19,7 @@ def safe_load_yaml(path):
         print(f"⚠️ Skipping missing file: {path}", flush=True)
         return {}
 
-# Load YAML/JSON files safely
-analyzer_data = safe_load_yaml(analyzer_path)
-advisor_data = safe_load_yaml(advisor_path)
-evaluation_data = safe_load_yaml(evaluation_path)
-
+# Safe JSON loader
 def load_json(path):
     if path.exists():
         with open(path, "r", encoding="utf-8") as f:
@@ -32,9 +28,13 @@ def load_json(path):
         print(f"⚠️ Skipping missing file: {path}", flush=True)
         return {}
 
+# Load data
+analyzer_data = safe_load_yaml(analyzer_path)
+advisor_data = safe_load_yaml(advisor_path)
+evaluation_data = safe_load_yaml(evaluation_path)
 scanoss_data = load_json(scanoss_path)
 
-# Initialize data lists
+# Init storage
 components = []
 vulnerabilities = []
 violations = []
@@ -77,26 +77,30 @@ if "evaluator" in evaluation_data:
         })
 
 # SCANOSS SPDX
-for match in scanoss_data.get("matches", []):
-    scanoss_components.append({
-        "component": match.get("name", "N/A"),
-        "version": match.get("version", "N/A"),
-        "license": match.get("licenses", [{}])[0].get("name", "N/A") if match.get("licenses") else "N/A"
-    })
+for file_path, matches in scanoss_data.items():
+    for match in matches:
+        scanoss_components.append({
+            "file": file_path,
+            "component": match.get("component", "N/A"),
+            "version": match.get("version", "N/A"),
+            "license": match.get("licenses", [{}])[0].get("name", "N/A") if match.get("licenses") else "N/A",
+            "license_url": match.get("licenses", [{}])[0].get("url", "N/A") if match.get("licenses") else "N/A",
+            "component_url": match.get("url", "N/A")
+        })
 
-# Convert to DataFrames
+# DataFrames
 components_df = pd.DataFrame(components)
 vuln_df = pd.DataFrame(vulnerabilities)
 violations_df = pd.DataFrame(violations)
 scanoss_df = pd.DataFrame(scanoss_components)
 
-# Merge ORT dataframes if any data exists
+# Merge ORT
 if not components_df.empty:
     result_df = components_df.merge(vuln_df, on="package_id", how="left")                              .merge(violations_df, on="package_id", how="left")
 else:
     result_df = pd.DataFrame()
 
-# Write to Excel with multiple sheets
+# Write Excel
 with pd.ExcelWriter("ort_full_scan_report.xlsx", engine="openpyxl") as writer:
     sheet_written = False
     if not result_df.empty:
@@ -110,7 +114,7 @@ with pd.ExcelWriter("ort_full_scan_report.xlsx", engine="openpyxl") as writer:
             writer, index=False, sheet_name="Summary"
         )
 
-# Final log summary
+# Final Logs
 print("\n📋 Final Report Summary:", flush=True)
 print(f"✅ Analyzer processed: {len(components)} components" if components else "⚠️ Analyzer skipped or empty", flush=True)
 print(f"✅ Advisor processed: {len(vulnerabilities)} vulnerabilities" if vulnerabilities else "⚠️ Advisor skipped or empty", flush=True)
