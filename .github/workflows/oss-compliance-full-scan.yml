@@ -79,11 +79,28 @@ jobs:
           cp .ort/config/config.yml /home/runner/.ort/config/config.yml || true
           cp .ort/evaluator/rules.kts /home/runner/.ort/config/evaluation/rules.kts
 
-      - name: ORT Analyze
+      - name: ORT Analyze (only with available package managers)
         run: |
+          available_pms=""
+          skipped_pms=""
+
+          command -v pip &> /dev/null && available_pms+="PIP," || skipped_pms+="PIP (pip not installed), "
+          command -v gradle &> /dev/null && available_pms+="Gradle," || skipped_pms+="Gradle (gradle not installed), "
+          command -v pod &> /dev/null && available_pms+="CocoaPods," || skipped_pms+="CocoaPods (pod not installed), "
+          command -v npm &> /dev/null && available_pms+="NPM," || skipped_pms+="NPM (npm not installed), "
+          command -v yarn &> /dev/null && available_pms+="Yarn," || skipped_pms+="Yarn (yarn not installed), "
+
+          # Remove trailing commas
+          available_pms="${available_pms%,}"
+          skipped_pms="${skipped_pms%, }"
+
+          echo "✅ Package managers used: $available_pms"
+          echo "⚠ Skipped: $skipped_pms"
+
           ort-cli/ort-54.0.0/bin/ort analyze \
             -i "$scan_path" \
-            -o ort-output/analyzer || true
+            -o ort-output/analyzer \
+            --package-managers "$available_pms" || true
 
       - name: SCANOSS Scan
         run: |
