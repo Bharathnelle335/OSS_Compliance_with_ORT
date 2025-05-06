@@ -12,7 +12,6 @@ on:
           - git
           - upload-zip
           - upload-tar
-
       git_url:
         description: 'Git repository URL (if scan_type is git)'
         required: false
@@ -77,53 +76,59 @@ jobs:
         run: |
           mkdir -p /home/runner/.ort/config/evaluation
           cp .ort/config/config.yml /home/runner/.ort/config/config.yml || true
-          cp .ort/evaluator/rules.kts /home/runner/.ort/config/evaluation/rules.kts
+          cp .ort/evaluator/rules.kts /home/runner/.ort/config/evaluation/rules.kts || true
 
-      - name: ORT Analyze (only with available package managers)
+      - name: ORT Analyze (dynamically with available managers)
         run: |
           available_pms=""
-          skipped_pms=""
 
-          command -v pip &> /dev/null && available_pms+="PIP," || skipped_pms+="PIP (pip not installed), "
-          command -v gradle &> /dev/null && available_pms+="Gradle," || skipped_pms+="Gradle (gradle not installed), "
-          command -v pod &> /dev/null && available_pms+="CocoaPods," || skipped_pms+="CocoaPods (pod not installed), "
-          command -v npm &> /dev/null && available_pms+="NPM," || skipped_pms+="NPM (npm not installed), "
-          command -v yarn &> /dev/null && available_pms+="Yarn," || skipped_pms+="Yarn (yarn not installed), "
+          if command -v pip &> /dev/null; then
+            available_pms="${available_pms}\n  - PIP"
+          else
+            echo "⚠️ Skipped: PIP (pip not installed)"
+          fi
 
-          # Remove trailing commas
-          available_pms="${available_pms%,}"
-          skipped_pms="${skipped_pms%, }"
+          if command -v gradle &> /dev/null; then
+            available_pms="${available_pms}\n  - Gradle"
+          else
+            echo "⚠️ Skipped: Gradle (gradle not installed)"
+          fi
 
-          echo "✅ Package managers used: $available_pms"
-          echo "⚠ Skipped: $skipped_pms"
+          if command -v npm &> /dev/null; then
+            available_pms="${available_pms}\n  - NPM"
+          else
+            echo "⚠️ Skipped: NPM (npm not installed)"
+          fi
+
+          if command -v yarn &> /dev/null; then
+            available_pms="${available_pms}\n  - Yarn"
+          else
+            echo "⚠️ Skipped: Yarn (yarn not installed)"
+          fi
+
+          if command -v pod &> /dev/null; then
+            available_pms="${available_pms}\n  - CocoaPods"
+          else
+            echo "⚠️ Skipped: CocoaPods (pod not installed)"
+          fi
+
+          echo -e "✅ Enabled package managers:$available_pms"
+
+          mkdir -p /home/runner/.ort/config
+
+          echo -e "analyzer:\n  enabledPackageManagers:$available_pms" > /home/runner/.ort/config/analyzer-configuration.yml
+
+          cat /home/runner/.ort/config/analyzer-configuration.yml  # optional debug
 
           ort-cli/ort-54.0.0/bin/ort analyze \
             -i "$scan_path" \
-            -o ort-output/analyzer \
-            --package-managers "$available_pms" || true
+            -o ort-output/analyzer || true
 
-      - name: SCANOSS Scan
-        run: |
-          python3 -m scanoss.cli scan \
-            -o ort-output/scanner/scanoss.spdx.json "$scan_path" || echo "⚠ SCANOSS failed"
-
-      - name: ORT Advisor (uses analyzer output only)
-        if: ${{ always() }}
-        run: |
-          if [ -f ort-output/analyzer/analyzer-result.yml ]; then
-            ort-cli/ort-54.0.0/bin/ort advise \
-              -i ort-output/analyzer/analyzer-result.yml \
-              -o ort-output/advisor \
-              --advisors OSV || true
-          fi
 
       - name: Run ORT Evaluate (if advisor result exists)
         run: |
           if [ -f ort-output/advisor/advisor-result.yml ]; then
-            ort-cli/ort-54.0.0/bin/ort evaluate \
-              -i ort-output/advisor/advisor-result.yml \
-              -o ort-output/evaluator \
-              --rules-file /home/runner/.ort/config/evaluation/rules.kts || true 
+            ort-cli/ort-54.0.0/bin/ort evaluate               -i ort-output/advisor/advisor-result.yml               -o ort-output/evaluator               --rules-file /home/runner/.ort/config/evaluation/rules.kts || true
           fi
         env:
           JAVA_HOME: ${{ env.JAVA_HOME }}
