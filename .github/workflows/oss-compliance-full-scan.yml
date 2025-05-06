@@ -124,6 +124,11 @@ jobs:
             -i "$scan_path" \
             -o ort-output/analyzer || true
 
+      - name: SCANOSS Scan
+        run: |
+          python3 -m scanoss.cli scan \
+            -o ort-output/scanner/scanoss.spdx.json "$scan_path" || echo "⚠ SCANOSS failed"
+
 
       - name: Run ORT Evaluate (if advisor result exists)
         run: |
